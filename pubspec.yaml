@@ -1,0 +1,34 @@
+name: telemovil
+description: "TeleMovil - Reproductor IPTV"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  shared_preferences: ^2.2.0
+  video_player: ^2.9.1
+  screen_brightness: ^2.1.8
+  file_picker: ^10.3.7       # Elegir archivo .m3u (compila contra SDK moderno)
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_launcher_icons: ^0.14.1
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/telemovil_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "#0A0A0F"
+  adaptive_icon_foreground: "assets/telemovil_icon.png"
