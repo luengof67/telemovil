@@ -6,7 +6,6 @@ plugins {
 android {
     namespace = "com.joseluengo.telemovil"
     compileSdk = 36
-    ndkVersion = "30.0.14904198"
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
