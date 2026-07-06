@@ -1737,6 +1737,8 @@ class _ImportScreenState extends State<ImportScreen> {
   final _nameC = TextEditingController();
   final _urlC = TextEditingController();
   final _uaC = TextEditingController(text: Store.defaultUa);
+  final _nameFocus = FocusNode();
+  final _urlFocus = FocusNode();
   final _uaFocus = FocusNode();
   bool _busy = false;
   String _status = '';
@@ -1771,6 +1773,8 @@ class _ImportScreenState extends State<ImportScreen> {
     _nameC.dispose();
     _urlC.dispose();
     _uaC.dispose();
+    _nameFocus.dispose();
+    _urlFocus.dispose();
     _uaFocus.dispose();
     super.dispose();
   }
@@ -1864,125 +1868,132 @@ class _ImportScreenState extends State<ImportScreen> {
     return Scaffold(
       appBar: AppBar(
           title: Text(_editing ? 'Editar lista' : 'Anadir lista')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          const Text('Nombre de la lista',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          TextField(controller: _nameC, decoration: _dec('Mi proveedor')),
-          const SizedBox(height: 16),
-          const Text('URL de la lista (Xtream get.php o .m3u)',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _urlC,
-            keyboardType: TextInputType.url,
-            minLines: 1,
-            maxLines: 3,
-            decoration: _dec('https://servidor/get.php?username=...'),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: const [
-              Expanded(child: Divider(color: kBorder)),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 8),
-                child: Text('o', style: TextStyle(color: kMuted)),
-              ),
-              Expanded(child: Divider(color: kBorder)),
-            ],
-          ),
-          const SizedBox(height: 12),
-          OutlinedButton.icon(
-            style: OutlinedButton.styleFrom(
-              foregroundColor: kAccent,
-              side: const BorderSide(color: kAccent),
-              padding: const EdgeInsets.symmetric(vertical: 12),
+      body: FocusTraversalGroup(
+        policy: ReadingOrderTraversalPolicy(),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            const Text('Nombre de la lista',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _nameC,
+              focusNode: _nameFocus,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _urlFocus.requestFocus(),
+              decoration: _dec('Mi proveedor'),
             ),
-            icon: const Icon(Icons.upload_file),
-            label: const Text('Elegir archivo .m3u'),
-            onPressed: _busy ? null : _importFromFile,
-          ),
-          const SizedBox(height: 16),
-          const Text('User-Agent',
-              style: TextStyle(fontWeight: FontWeight.bold)),
-          const SizedBox(height: 4),
-          const Text(
-            'Algunos proveedores exigen uno concreto. Por defecto VLC.',
-            style: TextStyle(color: kMuted, fontSize: 12),
-          ),
-          const SizedBox(height: 8),
-          RawAutocomplete<String>(
-            textEditingController: _uaC,
-            focusNode: _uaFocus,
-            optionsBuilder: (TextEditingValue value) {
-              final q = value.text.toLowerCase();
-              if (q.isEmpty) return _commonUas;
-              return _commonUas
-                  .where((u) => u.toLowerCase().contains(q));
-            },
-            fieldViewBuilder:
-                (context, controller, focusNode, onSubmitted) {
-              return TextField(
-                controller: controller,
-                focusNode: focusNode,
-                decoration: _dec(Store.defaultUa),
-                onSubmitted: (_) => onSubmitted(),
-              );
-            },
-            optionsViewBuilder: (context, onSelected, options) {
-              final list = options.toList();
-              return Align(
-                alignment: Alignment.topLeft,
-                child: Material(
-                  color: kSurface,
-                  elevation: 4,
-                  borderRadius: BorderRadius.circular(12),
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(
-                        maxHeight: 240, maxWidth: 600),
-                    child: ListView.builder(
-                      padding: EdgeInsets.zero,
-                      shrinkWrap: true,
-                      itemCount: list.length,
-                      itemBuilder: (_, i) {
-                        final opt = list[i];
-                        return ListTile(
-                          dense: true,
-                          title: Text(opt,
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(fontSize: 13)),
-                          onTap: () => onSelected(opt),
-                        );
-                      },
+            const SizedBox(height: 16),
+            const Text('URL de la lista (Xtream get.php o .m3u)',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _urlC,
+              focusNode: _urlFocus,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.next,
+              onSubmitted: (_) => _uaFocus.requestFocus(),
+              minLines: 1,
+              maxLines: 3,
+              decoration: _dec('https://servidor/get.php?username=...'),
+            ),
+            const SizedBox(height: 12),
+            Row(
+              children: const [
+                Expanded(child: Divider(color: kBorder)),
+                Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8),
+                  child: Text('o', style: TextStyle(color: kMuted)),
+                ),
+                Expanded(child: Divider(color: kBorder)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: kAccent,
+                side: const BorderSide(color: kAccent),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              icon: const Icon(Icons.upload_file),
+              label: const Text('Elegir archivo .m3u'),
+              onPressed: _busy ? null : _importFromFile,
+            ),
+            const SizedBox(height: 16),
+            const Text('User-Agent',
+                style: TextStyle(fontWeight: FontWeight.bold)),
+            const SizedBox(height: 4),
+            const Text(
+              'Algunos proveedores exigen uno concreto. Por defecto VLC.',
+              style: TextStyle(color: kMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            TextField(
+              controller: _uaC,
+              focusNode: _uaFocus,
+              textInputAction: TextInputAction.done,
+              decoration: _dec(Store.defaultUa),
+            ),
+            const SizedBox(height: 8),
+            // Sugerencias de User-Agent como botones enfocables (mando)
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: _commonUas.map((u) {
+                return Focusable(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => setState(() {
+                    _uaC.text = u;
+                    _uaC.selection = TextSelection.collapsed(
+                        offset: _uaC.text.length);
+                  }),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: kCard,
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: kBorder),
+                    ),
+                    child: Text(
+                      _uaLabel(u),
+                      style: const TextStyle(fontSize: 12),
                     ),
                   ),
-                ),
-              );
-            },
-          ),
-          const SizedBox(height: 20),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: kAccent),
-            onPressed: _busy ? null : _import,
-            child: _busy
-                ? const SizedBox(
-                    height: 20,
-                    width: 20,
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: Colors.white),
-                  )
-                : Text(_editing ? 'Guardar cambios' : 'Importar lista'),
-          ),
-          if (_status.isNotEmpty) ...[
+                );
+              }).toList(),
+            ),
             const SizedBox(height: 20),
-            Text(_status, style: const TextStyle(color: kMuted)),
+            FilledButton(
+              style: FilledButton.styleFrom(
+                backgroundColor: kAccent,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+              ),
+              onPressed: _busy ? null : _import,
+              child: _busy
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white),
+                    )
+                  : Text(_editing ? 'Guardar cambios' : 'Importar lista'),
+            ),
+            if (_status.isNotEmpty) ...[
+              const SizedBox(height: 20),
+              Text(_status, style: const TextStyle(color: kMuted)),
+            ],
           ],
-        ],
+        ),
       ),
     );
+  }
+
+  // Etiqueta corta para el boton de User-Agent
+  String _uaLabel(String ua) {
+    final slash = ua.indexOf('/');
+    final base = slash > 0 ? ua.substring(0, slash) : ua;
+    return base.length > 18 ? '${base.substring(0, 18)}...' : base;
   }
 
   InputDecoration _dec(String hint) => InputDecoration(
