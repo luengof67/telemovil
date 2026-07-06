@@ -94,9 +94,16 @@ class Playlist {
 // ─────────────────────────── Almacenamiento ───────────────────────────────
 class Store {
   static const defaultUa = 'VLC/3.0.20 LibVLC/3.0.20';
+
+  // Lista propia precargada (se crea solo la primera vez que se abre la app)
+  static const defaultListUrl =
+      'https://line.electroamadal.store/get.php?username=cbc1ad47&password=2df3f7d8&type=m3u_plus&output=ts';
+  static const defaultListName = 'Mi lista';
+
   static const _kPlaylists = 'tm_playlists';
   static const _kActive = 'tm_active';
   static const _kFavs = 'tm_favs';
+  static const _kSeeded = 'tm_seeded';
   static const _kOldChannels = 'tm_channels';
   static const _kOldUrl = 'tm_url';
   static const _kOldUa = 'tm_ua';
@@ -132,6 +139,22 @@ class Store {
           return [pl];
         }
       } catch (_) {}
+    }
+    // Precarga: la primera vez creamos la lista propia automaticamente.
+    // Si el usuario la borra luego, no vuelve a aparecer (flag _kSeeded).
+    final seeded = p.getBool(_kSeeded) ?? false;
+    if (!seeded) {
+      final pl = Playlist(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        name: defaultListName,
+        url: defaultListUrl,
+        ua: defaultUa,
+        channels: const [],
+      );
+      await savePlaylists([pl]);
+      await saveActiveId(pl.id);
+      await p.setBool(_kSeeded, true);
+      return [pl];
     }
     return [];
   }
@@ -895,6 +918,38 @@ class _HomeScreenState extends State<HomeScreen>
       _query = '';
       _resetVod();
     });
+    // Precarga automatica: si la lista activa tiene URL pero todavia no tiene
+    // canales guardados, los descargamos ahora (primera apertura).
+    if (active != null && active.url.isNotEmpty && active.channels.isEmpty) {
+      await _refreshActiveChannels();
+    }
+  }
+
+  // Descarga (o actualiza) los canales de la lista activa desde su URL
+  Future<void> _refreshActiveChannels() async {
+    final active = _active;
+    if (active == null || active.url.isEmpty) return;
+    setState(() => _loading = true);
+    final chs = await fetchChannels(active.url, active.ua);
+    if (!mounted) return;
+    if (chs.isNotEmpty) {
+      final updated = Playlist(
+        id: active.id,
+        name: active.name,
+        url: active.url,
+        ua: active.ua,
+        channels: chs,
+      );
+      final idx = _playlists.indexWhere((p) => p.id == active.id);
+      if (idx >= 0) _playlists[idx] = updated;
+      await Store.savePlaylists(_playlists);
+      setState(() {
+        _active = updated;
+        _loading = false;
+      });
+    } else {
+      setState(() => _loading = false);
+    }
   }
 
   bool _isFav(Channel c) => _favs.contains(c.url);
@@ -1873,31 +1928,21 @@ class _ImportScreenState extends State<ImportScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
-            const Text('Nombre de la lista',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _nameC,
-              focusNode: _nameFocus,
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _urlFocus.requestFocus(),
-              decoration: _dec('Mi proveedor'),
+            const SizedBox(height: 4),
+            _tvField(
+              label: 'Nombre de la lista',
+              c: _nameC,
+              hint: 'Mi proveedor',
+              autofocus: true,
             ),
-            const SizedBox(height: 16),
-            const Text('URL de la lista (Xtream get.php o .m3u)',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _urlC,
-              focusNode: _urlFocus,
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.next,
-              onSubmitted: (_) => _uaFocus.requestFocus(),
-              minLines: 1,
-              maxLines: 3,
-              decoration: _dec('https://servidor/get.php?username=...'),
+            const SizedBox(height: 14),
+            _tvField(
+              label: 'URL de la lista (Xtream get.php o .m3u)',
+              c: _urlC,
+              hint: 'https://servidor/get.php?username=...',
+              kb: TextInputType.url,
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             Row(
               children: const [
                 Expanded(child: Divider(color: kBorder)),
@@ -1908,66 +1953,22 @@ class _ImportScreenState extends State<ImportScreen> {
                 Expanded(child: Divider(color: kBorder)),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 14),
             OutlinedButton.icon(
               style: OutlinedButton.styleFrom(
                 foregroundColor: kAccent,
                 side: const BorderSide(color: kAccent),
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.symmetric(vertical: 14),
               ),
               icon: const Icon(Icons.upload_file),
               label: const Text('Elegir archivo .m3u'),
               onPressed: _busy ? null : _importFromFile,
             ),
-            const SizedBox(height: 16),
-            const Text('User-Agent',
-                style: TextStyle(fontWeight: FontWeight.bold)),
-            const SizedBox(height: 4),
-            const Text(
-              'Algunos proveedores exigen uno concreto. Por defecto VLC.',
-              style: TextStyle(color: kMuted, fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            TextField(
-              controller: _uaC,
-              focusNode: _uaFocus,
-              textInputAction: TextInputAction.done,
-              decoration: _dec(Store.defaultUa),
-            ),
-            const SizedBox(height: 8),
-            // Sugerencias de User-Agent como botones enfocables (mando)
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: _commonUas.map((u) {
-                return Focusable(
-                  borderRadius: BorderRadius.circular(20),
-                  onTap: () => setState(() {
-                    _uaC.text = u;
-                    _uaC.selection = TextSelection.collapsed(
-                        offset: _uaC.text.length);
-                  }),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 12, vertical: 8),
-                    decoration: BoxDecoration(
-                      color: kCard,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: kBorder),
-                    ),
-                    child: Text(
-                      _uaLabel(u),
-                      style: const TextStyle(fontSize: 12),
-                    ),
-                  ),
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 20),
+            const SizedBox(height: 24),
             FilledButton(
               style: FilledButton.styleFrom(
                 backgroundColor: kAccent,
-                padding: const EdgeInsets.symmetric(vertical: 14),
+                padding: const EdgeInsets.symmetric(vertical: 16),
               ),
               onPressed: _busy ? null : _import,
               child: _busy
@@ -1989,11 +1990,81 @@ class _ImportScreenState extends State<ImportScreen> {
     );
   }
 
-  // Etiqueta corta para el boton de User-Agent
-  String _uaLabel(String ua) {
-    final slash = ua.indexOf('/');
-    final base = slash > 0 ? ua.substring(0, slash) : ua;
-    return base.length > 18 ? '${base.substring(0, 18)}...' : base;
+  // Campo estilo TV: es un boton enfocable; al pulsar OK abre un cuadro para
+  // escribir con el teclado. Asi se navega perfecto con el mando.
+  Widget _tvField({
+    required String label,
+    required TextEditingController c,
+    required String hint,
+    TextInputType? kb,
+    bool autofocus = false,
+  }) {
+    final val = c.text.trim();
+    return Focusable(
+      autofocus: autofocus,
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _editText(label, c, kb: kb),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: kCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: kBorder),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label,
+                style: const TextStyle(color: kMuted, fontSize: 12)),
+            const SizedBox(height: 6),
+            Text(
+              val.isEmpty ? hint : val,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 16,
+                color: val.isEmpty ? kMuted : null,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Cuadro para escribir un valor (abre el teclado de la TV)
+  Future<void> _editText(String title, TextEditingController target,
+      {TextInputType? kb}) async {
+    final tmp = TextEditingController(text: target.text);
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => AlertDialog(
+        backgroundColor: kSurface,
+        title: Text(title),
+        content: TextField(
+          controller: tmp,
+          autofocus: true,
+          keyboardType: kb,
+          minLines: 1,
+          maxLines: 4,
+          decoration: _dec(''),
+          onSubmitted: (_) => Navigator.pop(context, tmp.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, tmp.text),
+            child: const Text('Aceptar', style: TextStyle(color: kAccent)),
+          ),
+        ],
+      ),
+    );
+    tmp.dispose();
+    if (result != null) setState(() => target.text = result);
   }
 
   InputDecoration _dec(String hint) => InputDecoration(
